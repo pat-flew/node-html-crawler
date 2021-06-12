@@ -2,15 +2,13 @@ const EventEmitter = require('events');
 const http = require('http');
 const https = require('https');
 const url = require('url');
-const punycode = require('punycode');
 
 class Crawler extends EventEmitter {
   constructor(config) {
     super();
 
     this.config = {
-      protocol: 'http:',
-      domain: 'example.com',
+      startUrl: 'http://example.com',
       limitForConnections: 10,
       limitForRedirects: 5,
       timeout: 300,
@@ -19,18 +17,30 @@ class Crawler extends EventEmitter {
     };
 
     if (typeof config === 'string') {
-      this.config.domain = config.trim();
+      this.config.startUrl = config;
     } else if (typeof config === 'object') {
       this.config = { ...this.config, ...config };
     }
 
-    this.config.domain = punycode.toASCII(this.config.domain);
-    this.config.startUrl = `${this.config.protocol}//${this.config.domain}/`;
+    if(!Array.isArray(this.config.crawlMatches)) {
+      this.config.crawlMatches = [this.config.crawlMatches];
+    }
+
+    this.config.crawlMatches = this.config.crawlMatches.map(
+      item => typeof item === 'object' ? item : new RegExp(item)
+    );
+
+    if(!this.config.crawlMatches) {
+      const urlObject = url.parse(this.config.startUrl);
+      this.config.crawlMatches = [
+        new RegExp(`^http(s)?://(www.)?${urlObject.host}${urlObject.pathname}`)
+      ];
+    }
 
     // Other params
     this.countOfConnections = 0;
     this.waitingOfConnection = 0;
-    this.startUrl = `${this.config.protocol}//${this.config.domain}/`;
+    this.startUrl = this.config.startUrl;
     this.foundLinks = new Set();
     this.countOfProcessedUrls = 0;
   }
@@ -41,7 +51,6 @@ class Crawler extends EventEmitter {
 
       if (this.countOfConnections < this.config.limitForConnections) {
         this.foundLinks.add(currentUrl);
-
         this.getDataByUrl(currentUrl)
           .then((headers) => {
             if (headers.statusCode === 200 && /^text\/html/.test(headers.headers['content-type'])) {
@@ -85,7 +94,7 @@ class Crawler extends EventEmitter {
     const urlObject = url.parse(urlString);
     let result = false;
 
-    if (!this.isInterestingUrl(urlString)) return result;
+    urlObject.path = urlObject.path || '';
 
     if (urlObject.protocol && urlObject.hostname) {
       result = `${urlObject.protocol}//${urlObject.host}${urlObject.path}`;
@@ -106,28 +115,21 @@ class Crawler extends EventEmitter {
     result = Crawler.removeDotsInUrl(result);
     result = Crawler.smartDecodeUrl(result);
 
+    if (!this.isInterestingUrl(result)) return false;
+
     return result;
   }
 
   isInterestingUrl(urlString) {
-    const urlObject = url.parse((/^\/\//.test(urlString.trim()) ? `http:${urlString}` : urlString));
-    let result = false;
 
-    if (/^https?:/.test(urlObject.protocol)) {
-      if (urlObject.hostname) {
-        if (urlObject.hostname.replace(/^w{3}\./, '') === this.config.domain.replace(/^w{3}\./, '')) {
-          result = true;
-        }
+    if(this.config.crawlMatches.some(re => re.test(urlString))) {
+      if(typeof this.config.urlFilter === 'function' && !this.config.urlFilter(urlString)) {
+        return false;
       }
-    } else if (!urlObject.protocol && !urlObject.host && urlObject.path) {
-      result = true;
+      return true;
     }
 
-    if (result && !this.config.urlFilter(urlString)) {
-      result = false;
-    }
-
-    return result;
+    return false;
   }
 
   static smartDecodeUrl(notDecodeUrl) {
