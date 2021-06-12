@@ -1,12 +1,8 @@
 ![logo node crawler](./logo.png)
 
-
-[![npm package](https://nodei.co/npm/node-html-crawler.png?downloads=true&downloadRank=true&stars=true)](https://www.npmjs.com/package/node-html-crawler)
-
-[![build status](https://api.travis-ci.org/safonovpro/node-html-crawler.svg?branch=master)](https://travis-ci.org/safonovpro/node-html-crawler)
-[![dependency status](https://david-dm.org/safonovpro/node-html-crawler/status.svg)](https://david-dm.org/safonovpro/node-html-crawler)
-
 # Crawler of html-pages for node.js
+
+> Modified from upstream to allow specification of a start url and optional expressions to define url-space for crawling.
 
 **Simple in use crawler** (spider) of site web pages by domain name.
 Written for node.js, using ES6.
@@ -34,15 +30,15 @@ const Crawler = require('node-html-crawler');
 Create instance of a class `Crawler` by passing the domain name:
 
 ```js
-const crawler = new Crawler('example.com');
+const crawler = new Crawler('http://example.com');
 ```
 
 Or with more advanced settings:
 
 ```js
 const crawler = new Crawler({
-    protocol: 'https:', // default 'http:'
-    domain: 'safonov.pro', // default 'example.com'
+    startUrl: 'https://www.example.com/page', // url to start crawl
+    crawlMatches: '^https://www.example.com/', // urls to match during crawl
     limitForConnections: 15, // number of simultaneous connections, default 10
     limitForRedirects: 5, // possible number of redirects, default 5
     timeout: 500, // number of milliseconds between pending connection, default 300
@@ -53,6 +49,9 @@ const crawler = new Crawler({
     urlFilter: (url) => true, // default filter
 });
 ```
+> Property `crawlMatches` can be a string, regular expression, or array of regular expressions and strings. Strings are used to initialise regular expressions. Urls that don't match the given pattern will not be crawled. In the case of an array, at least one expression must result in a match in order for a given url to be crawled.
+> 
+> If no crawlMatches are specified, `^http(s)?://(www.)?${host}${pathname}` will be used as default, where host and pathname are derived from the startUrl.
 
 Start crawling and subscribe to events:
 
@@ -105,8 +104,8 @@ Application finds all the URLs and outputs to the console the server response co
 ```js
 const Crawler = require('../crawler');
 
-const domain = process.argv[2];
-const crawler = new Crawler(domain);
+const startUrl = process.argv[2];
+const crawler = new Crawler(startUrl);
 
 crawler.crawl();
 crawler.on('data', (data) => console.log(data.result.statusCode, data.url));
@@ -124,9 +123,9 @@ Application looks for links on all pages of the site and saves their statuses in
 const fs = require('fs');
 const Crawler = require('../crawler');
 
-const domain = process.argv[2];
+const startUrl = process.argv[2];
 const crawler = new Crawler({
-  domain,
+  startUrl,
   timeout: 500,
 });
 const siteTree = { pages: [], urls: {}, redirects: {} };
@@ -186,9 +185,9 @@ const fs = require('fs');
 const url = require('url');
 const Crawler = require('../crawler');
 
-const domain = process.argv[2];
+const startUrl = process.argv[2];
 const crawler = new Crawler({
-  domain,
+  startUrl,
   timeout: 500,
 });
 
